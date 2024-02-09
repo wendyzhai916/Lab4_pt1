@@ -3,7 +3,7 @@
 def scrape():
     '''
     Jade's part
-    output: a dataframe
+    output: a dataframe. Each row represent a post, and columns are features extracted from that post
     '''
     return
 
@@ -12,12 +12,12 @@ def process(raw_df):
     '''
     Wendy & Lorenzo's part
     input: the dataframe returned by the scrape() function
-    output: the processed dataframe that is about to be stored to db
+    output: the processed dataframe that is about to be stored in db
     '''
     return
 
 
-def write_to_db(df):
+def write_to_db(processed_df):
     '''
     input: the dataframe returned by the process() function
     '''
