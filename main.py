@@ -85,10 +85,10 @@ def process(raw_df):
     output: the processed dataframe that is about to be stored in db
     '''
     processed_df = raw_df.drop_duplicates()
-    processed_df['timestamp'] = pd.to_datetime(processed_df['timestamp'], unit='s')
-    processed_df['domain'] = processed_df['title'].str.extract(r'\((.*?)\)')
-    processed_df.drop(columns=['title'], inplace=True)
-    processed_df.rename(columns={'author': 'post_author', 'timestamp': 'post_timestamp'}, inplace=True)
+    #processed_df['timestamp'] = pd.to_datetime(processed_df['timestamp'], unit='s')
+    #processed_df['domain'] = processed_df['title'].str.extract(r'\((.*?)\)')
+    #processed_df.drop(columns=['title'], inplace=True)
+    #processed_df.rename(columns={'author': 'post_author', 'timestamp': 'post_timestamp'}, inplace=True)
 
     keyword_list = []
     for item in processed_df['title']:
