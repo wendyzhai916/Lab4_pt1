@@ -6,6 +6,11 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
+import nltk
+nltk.download('stopwords')
+nltk.download('punkt')
+from rake_nltk import Rake
+
 
 options = Options()
 options.add_argument('--headless')
@@ -84,6 +89,20 @@ def process(raw_df):
     processed_df['domain'] = processed_df['title'].str.extract(r'\((.*?)\)')
     processed_df.drop(columns=['title'], inplace=True)
     processed_df.rename(columns={'author': 'post_author', 'timestamp': 'post_timestamp'}, inplace=True)
+
+    keyword_list = []
+    for item in processed_df['title']:
+        rake = Rake() # create rake object
+        rake.extract_keywords_from_text(item) 
+        score_phrase_pair = rake.get_ranked_phrases_with_scores() # return key phrases and its scores 
+        # limit phrases with score that is 4 and up
+        phrase_with_scores_five_and_up = [(score, phrase) for score, phrase in score_phrase_pair if score>=4]
+        # limit topic phrases to 5
+        phrase_with_scores_five_and_up = phrase_with_scores_five_and_up[:5]
+        keyword_list.append(phrase_with_scores_five_and_up)
+
+    processed_df['keywords'] = keyword_list	
+	
     return processed_df
 
 def write_to_db(processed_df):
