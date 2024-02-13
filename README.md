@@ -15,9 +15,9 @@ This script scrapes data from the Reddit tech subreddit, including post titles, 
 
 ## Installation
 1. Install Python 3.x from [python.org](https://www.python.org/downloads/).
-2. Install the required Python packages using pip:
+2. Install all the required Python packages using pip:
    ```bash
-   pip install selenium pandas beautifulsoup4
+   pip install -r requirements.txt
 
 3. Install geckodriver for Firefox. You can download it from the geckodriver releases page and add it to your system's PATH.
 
