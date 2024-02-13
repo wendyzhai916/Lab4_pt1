@@ -10,6 +10,7 @@ import nltk
 nltk.download('stopwords')
 nltk.download('punkt')
 from rake_nltk import Rake
+from msticpy.data import data_obfus
 
 
 options = Options()
@@ -102,7 +103,14 @@ def process(raw_df):
         keyword_list.append(phrase_with_scores_five_and_up)
 
     processed_df['keywords'] = keyword_list	
-	
+
+    masked_user = []
+    for username in processed_df['author']:
+        masked_user.append(data_obfus.hash_account(username))
+
+    processed_df['masked user'] = masked_user
+
+
     return processed_df
 
 def write_to_db(processed_df):
