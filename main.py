@@ -3,61 +3,44 @@ import time
 import pandas as pd
 from bs4 import BeautifulSoup
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+
 import nltk
 nltk.download('stopwords')
 nltk.download('punkt')
 from rake_nltk import Rake
 from msticpy.data import data_obfus
 
-
-options = Options()
-options.add_argument('--headless')
-options.add_argument('--no-sandbox')
-options.add_argument('--disable-dev-shm-usage')
-
-# driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-# URL = "https://www.cnbc.com/world/?region=world"
-# driver.get(URL)
-# time.sleep(5)
-# html = driver.page_source
-# soup = BeautifulSoup(html, "html.parser")
-# with open("../data/raw_data/web_data.html", "w") as file:
-#  file.write(soup.prettify())
-# driver.close()
+from sqlalchemy import create_engine
 
 
-def scrape():
+def scrape(post_num):
     '''
     Jade's part
     output: a dataframe. Each row represent a post, and columns are features extracted from that post
     '''
     # initialize a webdriver to control chrome
-    # driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     driver = webdriver.Firefox()
     # the url of the target page to scrape
     url = "https://www.reddit.com/r/tech"
     # connect to the target URL in selenium
     driver.get(url)
-    time.sleep(5)
-    html = driver.page_source
 
     # scroll down
     i = 1
     scroll_pause_time = 1
+    # number of times should the driver perform the scrolling down actions
+    scroll_cnt = max(1, round(post_num / 10)) 
     # retrieve the list of post HTML elements
     posts = []
     while True:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         i += 1
         time.sleep(scroll_pause_time)
-        if i == 10:
+        if i > scroll_cnt:
             break
-            
+
     # bs4     
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(driver.page_source, "html.parser")
     # find all the posts
     articles = soup.find_all(class_="w-full m-0")
     # for every post, get info
@@ -67,15 +50,13 @@ def scrape():
         post['title'] = article['aria-label']
         post['author'] = article.find('shreddit-post')['author']
         post['timestamp'] = article.find('shreddit-post')['created-timestamp']
-        # For every post, get the image URL if available
-        post['image url'] = article.find('img', class_='ImageBox-image')['src']
         # img src: have troubles with it
+        #post['image url'] = article.find('img', class_='ImageBox-image')['src']
         # resource link?
         posts.append(post)
 
     df_posts = pd.DataFrame.from_dict(posts,orient='columns')
     driver.quit()
-
     return df_posts
 
 
@@ -103,24 +84,62 @@ def process(raw_df):
         keyword_list.append(phrase_with_scores_five_and_up)
 
     processed_df['keywords'] = keyword_list	
-
+    # turn the list into string so that it can be stored in db
+    processed_df['keywords'] = processed_df['keywords'].apply(lambda x: ','.join(map(str, x)))
     masked_user = []
     for username in processed_df['author']:
         masked_user.append(data_obfus.hash_account(username))
 
     processed_df['masked user'] = masked_user
 
-
     return processed_df
 
-def write_to_db(processed_df):
-    '''
-    input: the dataframe returned by the process() function
-    '''
-    return
+
+def write_to_db(df):
+    print("PLease enter the configuration information about your database, separated by commas: host, user, password, database")
+    print("MAKE SURE you already have the DATABASE in your own machine")
+    config_list = input("Input Example, localhost, root, yout_password, your_db: ")
+    host = config_list.split(',')[0].strip()
+    user = config_list.split(',')[1].strip()
+    password = config_list.split(',')[2].strip()
+    database = config_list.split(',')[3].strip()
+    # connect to db:
+    db_config = {
+        'host': host,
+        'user' : user,
+        'password' : password,
+        'database' : database
+    }
+    print("The data scraped will be showed below: ")
+    print(df)
+    print("Storin data to the database...")
+    engine = create_engine('mysql+mysqlconnector://{user}:{password}@{host}/{database}'.format(**db_config))
+    table_name = input("Please enter the table name you want for this data in your database: ")
+    try:
+        df.to_sql(table_name, con=engine, if_exists='replace', index=False)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        engine.dispose()
+    print("Stored Successfully")
 
 
 if __name__ == "__main__":
-    raw_df = scrape()
-    processed_df = process(raw_df)
-    write_to_db(processed_df)
+    # get the number of posts to be scraped
+    print("Please enter the approximate number of posts you wish to scrape(didn't set 5000 in default bc it will take a long time)")
+    post_num = int(input("And note that the real number of posts that are finally scraped is only an approximation to your input number: "))
+    # get the final processed df
+    df_raw = scrape(post_num)
+    print("Scraped Successfully")
+    print("Start Data Processing...")
+    df_processed = process(df_raw)
+    print("Processed Successfully")
+    # choose options
+    flag = input("Would you like to print the results out in terminal(enter 1), or would you like to store it to your database(enter 2): ")
+
+    if flag == '1':
+        print(df_processed)
+    elif flag == '2':
+        write_to_db(df_processed)
+    else:
+        print("Your choice is invalid. Please enter 1 or 2.")
