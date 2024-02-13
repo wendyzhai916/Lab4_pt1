@@ -1,7 +1,7 @@
 # Reddit Image Scraper
 
 ## Overview
-This script scrapes data from the Reddit tech subreddit, including post titles, authors, timestamps, and image URLs. It then processes the scraped data and stores it in a database.
+This script scrapes data from the Reddit tech subreddit, including post titles, authors, timestamps. It then processes the scraped data and stores it in a database.
 
 ## Usage
 1. Run the `main.py` script.
