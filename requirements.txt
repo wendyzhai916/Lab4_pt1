@@ -1,3 +1,7 @@
 selenium
 beautifulsoup4
 pandas
+nltk
+rake_nltk
+msticpy
+gensim
