@@ -78,7 +78,7 @@ def process(raw_df):
         rake.extract_keywords_from_text(item) 
         score_phrase_pair = rake.get_ranked_phrases_with_scores() # return key phrases and its scores 
         # limit phrases with score that is 4 and up
-        phrase_with_scores_five_and_up = [(score, phrase) for score, phrase in score_phrase_pair if score>=4]
+        phrase_with_scores_five_and_up = [phrase for score, phrase in score_phrase_pair if score>=4]
         # limit topic phrases to 5
         phrase_with_scores_five_and_up = phrase_with_scores_five_and_up[:5]
         keyword_list.append(phrase_with_scores_five_and_up)
@@ -122,6 +122,31 @@ def write_to_db(df):
     finally:
         engine.dispose()
     print("Stored Successfully")
+
+def document_vector(df):
+    '''
+    input df produced by the process function (pulled from db version)
+    returns a df with 3 columns: reddit post title, list of keyword extracted from title, and document vector corresponding to title
+    '''
+    # remove punctuations
+    title_text = [x.translate(str.maketrans('', '', string.punctuation)) for x in df['title'] if True]
+    # lowercase all characters
+    title_text_lower = [x.lower() for x in title_text]
+    
+    # distributed memory
+    model_dm = Doc2Vec(dm=1, vector_size=25, min_count=2, epochs=30)
+    tagged_data = [TaggedDocument(words=word_tokenize(doc.lower()),
+                              tags=[str(i)]) for i, doc in enumerate(title_text_lower)]
+    model_dm.build_vocab(tagged_data)
+    model_dm.train(tagged_data,
+            total_examples=model_dm.corpus_count,
+            epochs=model_dm.epochs)
+    
+    document_vectors = [model_dm.infer_vector(word_tokenize(doc.lower())) for doc in title_text_lower]
+    
+    text_vec_df = pd.DataFrame({'title': df['title'], 
+                            'keywords':list_of_keywords, 'vectors': document_vectors})
+    return text_vec_df
 
 
 if __name__ == "__main__":
