@@ -7,3 +7,4 @@ msticpy
 gensim
 scikit-learn
 matplotlib
+keyboard
