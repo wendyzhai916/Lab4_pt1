@@ -5,3 +5,5 @@ nltk
 rake_nltk
 msticpy
 gensim
+scikit-learn
+matplotlib
