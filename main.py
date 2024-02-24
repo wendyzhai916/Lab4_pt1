@@ -1,5 +1,7 @@
 # run main.py and the processed scraped data will be stored in database
 import time
+import sys
+import keyboard
 import pandas as pd
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -11,6 +13,8 @@ from rake_nltk import Rake
 from msticpy.data import data_obfus
 
 from sqlalchemy import create_engine
+
+import cluster
 
 
 def scrape(post_num):
@@ -78,7 +82,7 @@ def process(raw_df):
         rake.extract_keywords_from_text(item) 
         score_phrase_pair = rake.get_ranked_phrases_with_scores() # return key phrases and its scores 
         # limit phrases with score that is 4 and up
-        phrase_with_scores_five_and_up = [phrase for score, phrase in score_phrase_pair if score>=4]
+        phrase_with_scores_five_and_up = [(score, phrase) for score, phrase in score_phrase_pair if score>=4]
         # limit topic phrases to 5
         phrase_with_scores_five_and_up = phrase_with_scores_five_and_up[:5]
         keyword_list.append(phrase_with_scores_five_and_up)
@@ -96,6 +100,42 @@ def process(raw_df):
 
 
 def write_to_db(df):
+    try:
+        df.to_sql(table_name, con=engine, if_exists='append', index=False)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        engine.dispose()
+    print("Stored Successfully")
+
+
+def on_key_event(event):
+    if event.name == 'quit':
+        print("Exiting thr program...")
+        keyboard.unhook_all()
+        quit()
+
+
+if __name__ == "__main__":
+    # Invalid sys input
+    if len(sys.argv) != 2:
+        print("Usage: python3 main.py interval_in_minutes")
+        sys.exiit(1)
+    try: 
+        interval = int(sys.argv[1])
+        if interval <= 0:
+            raise ValueError
+    except ValueError:
+        print("Please input a positive integer as interval_in_minutes")
+
+    # keyboard monitor
+    #keyboard.on_press(on_key_event)
+
+    # get the number of posts to be scraped for every interval
+    print("Please enter the approximate number of posts you wish to scrape for every interval(didn't set 5000 in default bc it will take a long time)")
+    post_num = int(input("The number: "))
+
+    # db configuration
     print("PLease enter the configuration information about your database, separated by commas: host, user, password, database")
     print("MAKE SURE you already have the DATABASE in your own machine")
     config_list = input("Input Example, localhost, root, yout_password, your_db: ")
@@ -110,61 +150,41 @@ def write_to_db(df):
         'password' : password,
         'database' : database
     }
-    print("The data scraped will be showed below: ")
-    print(df)
-    print("Storin data to the database...")
     engine = create_engine('mysql+mysqlconnector://{user}:{password}@{host}/{database}'.format(**db_config))
-    table_name = input("Please enter the table name you want for this data in your database: ")
-    try:
-        df.to_sql(table_name, con=engine, if_exists='replace', index=False)
-    except Exception as e:
-        print(f"An error occurred: {e}")
-    finally:
-        engine.dispose()
-    print("Stored Successfully")
-
-def document_vector(df):
-    '''
-    input df produced by the process function (pulled from db version)
-    returns a df with 3 columns: reddit post title, list of keyword extracted from title, and document vector corresponding to title
-    '''
-    # remove punctuations
-    title_text = [x.translate(str.maketrans('', '', string.punctuation)) for x in df['title'] if True]
-    # lowercase all characters
-    title_text_lower = [x.lower() for x in title_text]
     
-    # distributed memory
-    model_dm = Doc2Vec(dm=1, vector_size=25, min_count=2, epochs=30)
-    tagged_data = [TaggedDocument(words=word_tokenize(doc.lower()),
-                              tags=[str(i)]) for i, doc in enumerate(title_text_lower)]
-    model_dm.build_vocab(tagged_data)
-    model_dm.train(tagged_data,
-            total_examples=model_dm.corpus_count,
-            epochs=model_dm.epochs)
-    
-    document_vectors = [model_dm.infer_vector(word_tokenize(doc.lower())) for doc in title_text_lower]
-    
-    text_vec_df = pd.DataFrame({'title': df['title'], 
-                            'keywords':list_of_keywords, 'vectors': document_vectors})
-    return text_vec_df
-
-
-if __name__ == "__main__":
-    # get the number of posts to be scraped
-    print("Please enter the approximate number of posts you wish to scrape(didn't set 5000 in default bc it will take a long time)")
-    post_num = int(input("And note that the real number of posts that are finally scraped is only an approximation to your input number: "))
-    # get the final processed df
-    df_raw = scrape(post_num)
-    print("Scraped Successfully")
-    print("Start Data Processing...")
-    df_processed = process(df_raw)
-    print("Processed Successfully")
-    # choose options
-    flag = input("Would you like to print the results out in terminal(enter 1), or would you like to store it to your database(enter 2): ")
-
-    if flag == '1':
+    while True:
+        # get the final processed df
+        df_raw = scrape(post_num)
+        print("Scraped Successfully")
+        print("Start Data Processing...")
+        df_processed = process(df_raw)
+        print("Processed Successfully")
+        print("The processed scraped data for the current interval is as belows: ")
         print(df_processed)
-    elif flag == '2':
+
+        # clustering
+        vector_df = cluster.document_vector(df_processed)
+        clustered_df = cluster.cluster_and_identify_keywords(vector_df)
+        # The visulization of the clusters are as below:
+        cluster.draw_cluster(clustered_df)
+
+        # update the db
+        print("Writing to the database...")
+        table_name = input("Please enter the table name you want for this data in your database: ")
         write_to_db(df_processed)
-    else:
-        print("Your choice is invalid. Please enter 1 or 2.")
+        print("The database has been updated successfully!")
+        print("\n")
+
+        # waiting fot the next round until input "quit"
+        print(f"Waiting for the next round, the interval is {interval} minutues")
+        flag = input("If you don't want to continue, input 'quit' to exit (or enter anything else if don't want to exit): ")
+        if flag == "quit":
+            print("Exiting the program...")
+            break
+        try:
+            print("Waiting...")
+            time.sleep(interval*60)
+        except KeyboardInterrupt:
+            print("Interrupted by user")
+            break
+        
